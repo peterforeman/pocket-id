@@ -19,6 +19,7 @@ type services struct {
 	webauthnService    *service.WebAuthnService
 	userService        *service.UserService
 	customClaimService *service.CustomClaimService
+	customScopeService *service.CustomScopeService
 	oidcService        *service.OidcService
 	userGroupService   *service.UserGroupService
 	ldapService        *service.LdapService
@@ -48,8 +49,9 @@ func initServices(ctx context.Context, db *gorm.DB, httpClient *http.Client) (sv
 
 	svc.userService = service.NewUserService(db, svc.jwtService, svc.auditLogService, svc.emailService, svc.appConfigService)
 	svc.customClaimService = service.NewCustomClaimService(db)
+	svc.customScopeService = service.NewCustomScopeService(db)
 
-	svc.oidcService, err = service.NewOidcService(ctx, db, svc.jwtService, svc.appConfigService, svc.auditLogService, svc.customClaimService)
+	svc.oidcService, err = service.NewOidcService(ctx, db, svc.jwtService, svc.appConfigService, svc.auditLogService, svc.customClaimService, svc.customScopeService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OIDC service: %w", err)
 	}

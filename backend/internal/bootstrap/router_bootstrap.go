@@ -119,7 +119,7 @@ func initRouterInternal(db *gorm.DB, svc *services) (utils.Service, error) {
 
 	// Set up base routes
 	baseGroup := r.Group("/", rateLimitMiddleware)
-	controller.NewWellKnownController(baseGroup, svc.jwtService)
+	controller.NewWellKnownController(baseGroup, svc.jwtService, svc.customScopeService)
 
 	// Set up healthcheck routes
 	// These are not rate-limited

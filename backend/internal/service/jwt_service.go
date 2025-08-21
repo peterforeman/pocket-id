@@ -335,8 +335,16 @@ func (s *JwtService) VerifyIdToken(tokenString string, acceptExpiredTokens bool)
 	return token, nil
 }
 
+// SetScope sets the "scope" claim in the token
+func SetScope(token jwt.Token, scope string) error {
+	if scope == "" {
+		return nil
+	}
+	return token.Set("scope", scope)
+}
+
 // BuildOAuthAccessToken creates an OAuth access token with all claims
-func (s *JwtService) BuildOAuthAccessToken(user model.User, clientID string) (jwt.Token, error) {
+func (s *JwtService) BuildOAuthAccessToken(user model.User, clientID string, scope string) (jwt.Token, error) {
 	now := time.Now()
 	token, err := jwt.NewBuilder().
 		Subject(user.ID).
@@ -358,12 +366,18 @@ func (s *JwtService) BuildOAuthAccessToken(user model.User, clientID string) (jw
 		return nil, fmt.Errorf("failed to set 'type' claim in token: %w", err)
 	}
 
+	// Add scope claim
+	err = SetScope(token, scope)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set 'scope' claim in token: %w", err)
+	}
+
 	return token, nil
 }
 
 // GenerateOAuthAccessToken creates and signs an OAuth access token
-func (s *JwtService) GenerateOAuthAccessToken(user model.User, clientID string) (string, error) {
-	token, err := s.BuildOAuthAccessToken(user, clientID)
+func (s *JwtService) GenerateOAuthAccessToken(user model.User, clientID string, scope string) (string, error) {
+	token, err := s.BuildOAuthAccessToken(user, clientID, scope)
 	if err != nil {
 		return "", err
 	}
@@ -375,6 +389,24 @@ func (s *JwtService) GenerateOAuthAccessToken(user model.User, clientID string) 
 	}
 
 	return string(signed), nil
+}
+
+// BuildOAuthAccessTokenWithClaims creates an OAuth access token with custom claims
+func (s *JwtService) BuildOAuthAccessTokenWithClaims(user model.User, clientID string, scope string, customClaims map[string]any) (jwt.Token, error) {
+	token, err := s.BuildOAuthAccessToken(user, clientID, scope)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add custom claims to the access token
+	for key, value := range customClaims {
+		err = token.Set(key, value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to set custom claim '%s': %w", key, err)
+		}
+	}
+
+	return token, nil
 }
 
 func (s *JwtService) VerifyOAuthAccessToken(tokenString string) (jwt.Token, error) {

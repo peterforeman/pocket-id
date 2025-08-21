@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -17,8 +18,8 @@ import (
 // @Summary OIDC Discovery controller
 // @Description Initializes OIDC discovery and JWKS endpoints
 // @Tags Well Known
-func NewWellKnownController(group *gin.RouterGroup, jwtService *service.JwtService) {
-	wkc := &WellKnownController{jwtService: jwtService}
+func NewWellKnownController(group *gin.RouterGroup, jwtService *service.JwtService, customScopeService *service.CustomScopeService) {
+	wkc := &WellKnownController{jwtService: jwtService, customScopeService: customScopeService}
 
 	// Pre-compute the OIDC configuration document, which is static
 	var err error
@@ -34,8 +35,9 @@ func NewWellKnownController(group *gin.RouterGroup, jwtService *service.JwtServi
 }
 
 type WellKnownController struct {
-	jwtService *service.JwtService
-	oidcConfig []byte
+	jwtService         *service.JwtService
+	customScopeService *service.CustomScopeService
+	oidcConfig         []byte
 }
 
 // jwksHandler godoc
@@ -71,6 +73,25 @@ func (wkc *WellKnownController) computeOIDCConfiguration() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get key algorithm: %w", err)
 	}
+
+	// Get custom scopes from the service
+	customScopes, err := wkc.customScopeService.GetAllCustomScopes(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get custom scopes: %w", err)
+	}
+
+	// Combine standard and custom scopes
+	allScopes := append([]string{"openid", "profile", "email", "groups"}, customScopes...)
+
+	// Get custom claims to add to claims_supported
+	customClaims, err := wkc.customScopeService.GetAllCustomScopes(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get custom claims: %w", err)
+	}
+
+	// Combine standard and custom claims
+	allClaims := append([]string{"sub", "given_name", "family_name", "name", "email", "email_verified", "preferred_username", "picture", "groups"}, customClaims...)
+
 	config := map[string]any{
 		"issuer":                                         appUrl,
 		"authorization_endpoint":                         appUrl + "/authorize",
@@ -81,8 +102,8 @@ func (wkc *WellKnownController) computeOIDCConfiguration() ([]byte, error) {
 		"device_authorization_endpoint":                  appUrl + "/api/oidc/device/authorize",
 		"jwks_uri":                                       appUrl + "/.well-known/jwks.json",
 		"grant_types_supported":                          []string{service.GrantTypeAuthorizationCode, service.GrantTypeRefreshToken, service.GrantTypeDeviceCode},
-		"scopes_supported":                               []string{"openid", "profile", "email", "groups"},
-		"claims_supported":                               []string{"sub", "given_name", "family_name", "name", "email", "email_verified", "preferred_username", "picture", "groups"},
+		"scopes_supported":                               allScopes,
+		"claims_supported":                               allClaims,
 		"response_types_supported":                       []string{"code", "id_token"},
 		"subject_types_supported":                        []string{"public"},
 		"id_token_signing_alg_values_supported":          []string{alg.String()},
